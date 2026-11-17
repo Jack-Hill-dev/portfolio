@@ -17,6 +17,7 @@ const ease = value => value * value * value * (value * (value * 6 - 15) + 10);
 const lerp = (start, end, progress) => start + (end - start) * progress;
 let current = 0, target = 0, velocity = 0, last = 0;
 let activeText = -1, activePage = -1;
+let travelRate = 1;
 let autoplayStart = null;
 let autoplayDone = false;
 let scrollLocked = false;
@@ -47,7 +48,7 @@ function finishAutoplay() {
     read();
   });
 }
-let scrollDistance = 1, width = innerWidth, height = innerHeight, diameter = 1;
+let scrollDistance = 1, width = innerWidth, height = innerHeight, diameter = 1, cvWidth = 1;
 
 function read() {
   if (scrollLocked) return;
@@ -58,20 +59,31 @@ function measure() {
   width = stage.clientWidth;
   height = stage.clientHeight;
   scrollDistance = Math.max(1, document.querySelector(".journey").offsetHeight - innerHeight);
-  snapPoints.forEach((point, index) => {
-    point.style.top = `${Math.max(0, Math.min(scrollDistance - 1, stops[index] / 24.2 * scrollDistance))}px`;
-  });
   diameter = width <= 700 ? width * 3.2 : Math.min(height * 3.44, width * 2.16);
   circle.style.width = `${diameter}px`;
   circle.style.height = `${diameter}px`;
   const body = document.querySelector(".cv-body");
   const paper = document.querySelector(".cv-paper");
-  const paperWidth = Math.min(width * (width <= 700 ? .84 : .5), height * .60);
+  const panelHeight = Math.min(height * (width <= 700 ? .68 : .78), Math.max(260, height - 190));
+  stage.style.setProperty("--panel-height", `${panelHeight}px`);
+  const paperWidth = panelHeight * 210 / 297;
+  cvWidth = paperWidth;
   const fit = paperWidth / 794;
   paper.style.width = `${paperWidth}px`;
   paper.style.height = `${paperWidth * 297 / 210}px`;
   windows[1].style.width = `${paperWidth}px`;
   body.style.transform = `scale(${fit})`;
+  const mobile = width <= 700;
+  const gap = mobile ? 36 : 72;
+  const projectWidth = width * (mobile ? .78 : .5);
+  const projectCenter = width * (mobile ? .29 : .19) + cvWidth / 2 + gap + projectWidth / 2;
+  const firstDistance = Math.max(1, projectCenter - width / 2);
+  travelRate = (firstDistance + projectWidth + gap) / 2.7;
+  const projectStop = 2.9 + firstDistance / travelRate;
+  stops[3] = 6.2 + (projectStop - 2.6) * 6;
+  snapPoints.forEach((point, index) => {
+    point.style.top = `${Math.max(0, Math.min(scrollDistance - 1, stops[index] / 24.2 * scrollDistance))}px`;
+  });
   read();
 }
 addEventListener("scroll", read, { passive: true });
@@ -115,14 +127,21 @@ function tick(time) {
   const mobile = width <= 700;
   copy.style.transform = reduce.matches ? "none" : `translate3d(0,${-clamp(current / 1.4) * (mobile ? 24 : 65)}px,0)`;
   const compress = ease(clamp((current - 1.55) / .9));
-  const rawPage = current <= 4 ? clamp((current - 2.9) / 1.1) : 1 + clamp((current - 4) / 1.6);
-  const page = rawPage;
+  const elapsedScroll = clamp(current - 2.9, 0, 2.7);
+  const gap = mobile ? 36 : 72;
+  const projectWidth = width * (mobile ? .78 : .5);
+  const cvHomeX = width * (mobile ? .29 : .19);
+  const projectCenter = cvHomeX + cvWidth / 2 + gap + projectWidth / 2;
+  const firstDistance = projectCenter - width / 2;
+  const travel = elapsedScroll * travelRate;
+  const page = travel <= firstDistance ? travel / Math.max(1, firstDistance) : 1 + (travel - firstDistance) / (projectWidth + gap);
   const active = Math.round(page);
-  const spacing = width * (mobile ? .86 : .43);
   const homeWidth = lerp(width, width * (mobile ? .30 : .23), compress);
   const homeHeight = lerp(height, height * .56, compress);
-  const exit = ease(clamp((current - 2.25) / .65));
-  const homeLeft = lerp(0, width * .045, compress) - exit * (homeWidth + width * .08) - page * spacing;
+  const exit = ease(clamp((current - 1.92) / .38));
+  const homeLeft = lerp(0, width * .045, compress) - exit * (homeWidth + width * .16) - travel;
+  windows[0].style.visibility = "visible";
+  circle.style.visibility = "visible";
   windows[0].style.width = `${homeWidth}px`;
   windows[0].style.height = `${homeHeight}px`;
   windows[0].style.left = "0";
@@ -130,13 +149,13 @@ function tick(time) {
   windows[0].style.borderRadius = `${compress * 18}px`;
   windows[0].style.transform = `translate3d(${homeLeft}px,-50%,0)`;
   windows[0].style.setProperty("--compressed", compress);
-  const cvHomeX = width * (mobile ? .38 : .26);
-  const entrance = ease(clamp((current - 2.05) / .85));
-  const cvX = lerp(width * 1.35, cvHomeX, entrance) - page * spacing;
-  windows[1].style.transform = `translate3d(calc(-50% + ${cvX - width / 2}px), -50%, 0) rotate(${reduce.matches ? 0 : 4}deg)`;
+  const entrance = ease(clamp((current - 1.78) / .86));
+  const homeEdge = homeLeft + homeWidth;
+  const cvX = Math.max(cvHomeX - travel, homeEdge + gap + cvWidth / 2);
+  windows[1].style.transform = `translate3d(calc(-50% + ${cvX - width / 2}px), -50%, 0) rotate(0deg)`;
   windows.slice(2).forEach((element, offset) => {
-    const arrival = lerp(width * 1.5, width * .5 + (offset + 1) * spacing, entrance);
-    const x = arrival - width * .5 - page * spacing;
+    const arrival = lerp(width * 1.5, projectCenter + offset * (projectWidth + gap), entrance);
+    const x = arrival - width * .5 - travel;
     element.style.transform = `translate3d(calc(-50% + ${x}px), -50%, 0)`;
   });
 
@@ -164,3 +183,90 @@ function tick(time) {
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);
+
+const projectDetails = document.querySelector(".project-details");
+document.querySelector(".project-more").addEventListener("click", () => projectDetails.showModal());
+document.querySelector(".project-details-close").addEventListener("click", () => projectDetails.close());
+projectDetails.addEventListener("click", event => { if (event.target === projectDetails) projectDetails.close(); });
+
+const contactPanel = document.querySelector(".contact-panel");
+const greeting = document.querySelector(".greeting-word");
+const requestLine = document.querySelector(".terminal-request");
+const jsonOutput = document.querySelector(".terminal-json");
+const copyStatus = document.querySelector(".copy-status");
+const pause = ms => new Promise(resolve => setTimeout(resolve, reduce.matches ? 0 : ms));
+let contactStarted = false;
+async function typeInto(element, text, speed = 32) {
+  for (const character of Array.from(text)) {
+    element.textContent += character;
+    if (!reduce.matches) await pause(speed);
+  }
+}
+async function copyValue(button, value) {
+  if (button.dataset.copying === "true") return;
+  try {
+    await navigator.clipboard.writeText(value);
+    button.dataset.copying = "true";
+    button.textContent = "Copied";
+    copyStatus.textContent = "Copied to clipboard";
+    setTimeout(() => {
+      button.textContent = button.dataset.label || value;
+      button.dataset.copying = "false";
+      copyStatus.textContent = "";
+    }, 1500);
+  } catch {
+    copyStatus.textContent = "Couldn't copy. You can select and copy the text.";
+  }
+}
+async function appendContact(value, copyTarget = value) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.disabled = true;
+  button.className = "terminal-copy";
+  button.setAttribute("aria-label", `Copy ${copyTarget}`);
+  button.dataset.label = value;
+  button.style.minWidth = `${value.length}ch`;
+  button.addEventListener("click", () => copyValue(button, copyTarget));
+  jsonOutput.append(button);
+  await typeInto(button, value, 28);
+  button.disabled = false;
+}
+async function contactSequence() {
+  await pause(220);
+  if (!reduce.matches) {
+    for (const word of ["Bonjour", "Hola", "Ciao", "こんにちは", "مرحبا", "Hello"]) {
+      const letters = Array.from(greeting.textContent);
+      while (letters.length) {
+        letters.pop(); greeting.textContent = letters.join(""); await pause(15);
+      }
+      greeting.lang = word === "こんにちは" ? "ja" : word === "مرحبا" ? "ar" : "en";
+      await typeInto(greeting, word, 32);
+      await pause(170);
+    }
+  }
+  contactPanel.classList.add("contact-ready");
+  await pause(650);
+  await typeInto(requestLine, "GET https://jack-hill-dev.github.io/portfolio/contact", 24);
+  await pause(400);
+  const appendText = async text => {
+    const node = document.createElement("span");
+    jsonOutput.append(node);
+    await typeInto(node, text, 23);
+  };
+  await appendText("{\n  \"message\": \"Hello world.\",\n  \"status\": \"200\",\n  \"contact_details\": {\n    \"email\": \"");
+  await appendContact("JH.Hill2010@outlook.com");
+  await appendText("\",\n    \"github\": \"");
+  await appendContact("Jack-Hill-dev", "https://github.com/Jack-Hill-dev");
+  await appendText("\",\n    \"mobile\": \"");
+  await appendContact("+44 7306 549599");
+  await appendText("\"\n  }\n}");
+  contactPanel.classList.add("contact-complete");
+}
+const contactObserver = new IntersectionObserver(entries => {
+  if (!contactStarted && entries.some(entry => entry.isIntersecting && entry.intersectionRatio >= .55)) {
+    contactStarted = true;
+    contactObserver.disconnect();
+    contactSequence();
+  }
+}, { threshold: [.55] });
+contactObserver.observe(contactPanel);

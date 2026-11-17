@@ -1,0 +1,9 @@
+{
+  "message": "Hello world.",
+  "status": "200",
+  "contact_details": {
+    "email": "JH.Hill2010@outlook.com",
+    "github": "Jack-Hill-dev",
+    "mobile": "+44 7306 549599"
+  }
+}
